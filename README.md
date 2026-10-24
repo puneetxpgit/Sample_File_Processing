@@ -116,6 +116,13 @@ the allowed types for the category, for example `SNAP`, `OVP`, `Powershift` for
 Tower or `Battery Replacement`, `Ground Prep`, `PDU` for Ground. The list of
 allowed types per category is `requestTypes` in `config/settings.json`.
 
+The same diagram is kept as a standalone file: Mermaid source in
+`docs/request_type_waterfall.mmd` and a rendered copy in
+`docs/request_type_waterfall.svg`. Regenerate the SVG after editing the
+source with `npx @mermaid-js/mermaid-cli -i docs/request_type_waterfall.mmd -o docs/request_type_waterfall.svg`.
+
+![Request Type waterfall](docs/request_type_waterfall.svg)
+
 The waterfall stops at the **first stage that reaches the minimum confidence**
 (`requestTypeMinConfidence`, default **90**). If no stage reaches it, the type
 is left blank and the row is written to the Review sheet with the reason.
@@ -381,3 +388,5 @@ python -m pytest -q
 | `processor/export_kirke.py` | Kirke workbook writer, MOP naming, manifest |
 | `workflow/outlook-mop-automation.json` | n8n workflow that chains the steps |
 | `config/settings.json` | Every list, phrase, and threshold |
+| `docs/request_type_waterfall.mmd` | Standalone Mermaid source for the Stage 2 waterfall |
+| `docs/request_type_waterfall.svg` | Rendered copy of the waterfall diagram |

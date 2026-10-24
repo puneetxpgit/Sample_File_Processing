@@ -1,0 +1,64 @@
+%% Request Type waterfall
+%% Source of truth: processor/request_type.py, classify_request_type()
+%% The first stage that reaches requestTypeMinConfidence (default 90) wins.
+%% AI stages run only when MOP_AI_API_KEY or OPENAI_API_KEY is set.
+
+flowchart TD
+    IN([BRIEF SOW from the spreadsheet row]) --> S1
+
+    subgraph pass1 [Pass 1: SOW text only]
+        direction TB
+        S1["1. Catalog match on SOW
+        exact 98 / contains 95 / overlap 90-94
+        sow_catalog.py"]
+        S2["2. TF-IDF nearest neighbor on SOW
+        labeled Tower / Ground sheet rows
+        sow_model.py"]
+        S3["3. Explicit phrases on SOW
+        explicitPhrases in settings.json, 95"]
+        S4["4. AI on SOW
+        only if API key is set"]
+        S1 -->|below 90| S2
+        S2 -->|below 90| S3
+        S3 -->|below 90| S4
+    end
+
+    S4 -->|below 90 or no key| P2["Add MOP scope text and email body
+    strip email addresses and phone numbers"]
+    P2 --> S5
+
+    subgraph pass2 [Pass 2: SOW + MOP + email body]
+        direction TB
+        S5["5. Catalog match on MOP text"]
+        S6["6. TF-IDF nearest neighbor on MOP text"]
+        S7["7. Explicit phrases on SOW + MOP + body"]
+        S8["8. AI on SOW + MOP + body
+        only if API key is set"]
+        S5 -->|below 90| S6
+        S6 -->|below 90| S7
+        S7 -->|below 90| S8
+    end
+
+    S1 -->|">= 90 catalog_sow"| OUT
+    S2 -->|">= 90 model_sow"| OUT
+    S3 -->|">= 90 explicit_sow_only"| OUT
+    S4 -->|">= 90 sow_only"| OUT
+    S5 -->|">= 90 catalog_mop"| OUT
+    S6 -->|">= 90 model_mop"| OUT
+    S7 -->|">= 90 explicit_sow_mop_body"| OUT
+    S8 -->|">= 90 sow_mop_body"| OUT
+    S8 -->|below 90 or no key| U
+
+    OUT([Request Type assigned
+    result carries stage, confidence, reason])
+    U([Blank Request Type, stage unresolved
+    row is written to the Review sheet])
+
+    classDef rule fill:#e8f1fb,stroke:#2b6cb0,color:#1a365d
+    classDef ai fill:#fdf2e9,stroke:#c05621,color:#7b341e,stroke-dasharray: 4 3
+    classDef good fill:#e6f4ea,stroke:#2f855a,color:#22543d
+    classDef review fill:#fff5f5,stroke:#c53030,color:#742a2a
+    class S1,S2,S3,S5,S6,S7,P2 rule
+    class S4,S8 ai
+    class OUT good
+    class U review
