@@ -39,6 +39,12 @@ flowchart TD
     J --> K[Manifest + reply summary]
 ```
 
+A more detailed version of this flow, including the Python pipeline steps, is
+kept as a standalone diagram: `docs/end_to_end_flow.mmd` (Mermaid source)
+and `docs/end_to_end_flow.svg` (rendered).
+
+![End-to-end flow](docs/end_to_end_flow.svg)
+
 The n8n workflow in `workflow/outlook-mop-automation.json` wires the same
 steps: **Manual Trigger → Classification Config → Classify Forwarded Email →
 Route Category → Process Excel and MOP**. The Code node runs
@@ -89,6 +95,12 @@ flowchart TD
     X2 -->|neither| R5
 ```
 
+The full decision tree, with every Review exit and the exact parsing rules, is
+kept as a standalone diagram: `docs/email_classification.mmd` (Mermaid
+source) and `docs/email_classification.svg` (rendered).
+
+![Email classification flow](docs/email_classification.svg)
+
 Details worth knowing:
 
 - **Innermost block wins.** A double forward has two or three header blocks.
@@ -118,8 +130,7 @@ allowed types per category is `requestTypes` in `config/settings.json`.
 
 The same diagram is kept as a standalone file: Mermaid source in
 `docs/request_type_waterfall.mmd` and a rendered copy in
-`docs/request_type_waterfall.svg`. Regenerate the SVG after editing the
-source with `npx @mermaid-js/mermaid-cli -i docs/request_type_waterfall.mmd -o docs/request_type_waterfall.svg`.
+`docs/request_type_waterfall.svg`.
 
 ![Request Type waterfall](docs/request_type_waterfall.svg)
 
@@ -388,5 +399,23 @@ python -m pytest -q
 | `processor/export_kirke.py` | Kirke workbook writer, MOP naming, manifest |
 | `workflow/outlook-mop-automation.json` | n8n workflow that chains the steps |
 | `config/settings.json` | Every list, phrase, and threshold |
-| `docs/request_type_waterfall.mmd` | Standalone Mermaid source for the Stage 2 waterfall |
-| `docs/request_type_waterfall.svg` | Rendered copy of the waterfall diagram |
+| `docs/end_to_end_flow.mmd`, `.svg` | Standalone end-to-end flow diagram, n8n nodes plus pipeline steps |
+| `docs/email_classification.mmd`, `.svg` | Standalone Stage 1 decision tree with every Review exit |
+| `docs/request_type_waterfall.mmd`, `.svg` | Standalone Stage 2 waterfall |
+
+## Diagrams
+
+The three diagrams under `docs/` are the source of truth for the flow. Edit the
+`.mmd` file and regenerate its `.svg`:
+
+```bash
+npx @mermaid-js/mermaid-cli -i docs/email_classification.mmd -o docs/email_classification.svg
+npx @mermaid-js/mermaid-cli -i docs/request_type_waterfall.mmd -o docs/request_type_waterfall.svg
+npx @mermaid-js/mermaid-cli -i docs/end_to_end_flow.mmd -o docs/end_to_end_flow.svg
+```
+
+| Diagram | Shows |
+| --- | --- |
+| `docs/end_to_end_flow` | Email in, Kirke workbook out: the n8n nodes and each Python pipeline step |
+| `docs/email_classification` | Stage 1: forward vs direct, header block parsing, every Tower / Ground / Review exit with its reason |
+| `docs/request_type_waterfall` | Stage 2: the eight stages across two passes, the confidence each can produce, and the optional AI steps |

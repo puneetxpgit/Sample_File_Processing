@@ -1,0 +1,129 @@
+%% Stage 1: Tower / Ground / Review email classification
+%% Source of truth: processor/classify_email.py (Python) and
+%% processor/n8n_classify.js (n8n Code node, same logic).
+%% No text understanding is involved: addresses are extracted with a
+%% regular expression and looked up in the lists from config/settings.json.
+
+flowchart TD
+    IN([Email arrives
+    id, subject, body, from, attachments]) --> CFG
+
+    CFG["Load address lists from settings.json
+    towerRecipients / groundRecipients
+    towerSenders / groundSenders
+    lowercase and trim every entry"] --> V1
+
+    V1{"Same address on both
+    Tower and Ground lists?"}
+    V1 -->|yes| R1(["Review
+    Address is configured on both lists"])
+    V1 -->|no| V2{"All four lists empty?"}
+    V2 -->|yes| R2(["Review
+    recipient and sender lists are empty"])
+    V2 -->|no| BT
+
+    BT["Get body text
+    string body as is
+    HTML body: br/p/div/tr -> newline, strip tags, decode entities
+    else text / textPlain / bodyPreview"] --> MK
+
+    MK{"Body contains
+    '-----Original Message-----' or
+    'Begin forwarded message'?"}
+
+    %% ---------------- Forward branch ----------------
+    MK -->|yes| FE{"Body empty?"}
+    FE -->|yes| R3(["Review
+    Email body is missing or empty"])
+    FE -->|no| PB
+
+    subgraph fwd [Outlook forward: classify by the inner To line]
+        direction TB
+        PB["Parse header blocks from the marker down
+        join indented continuation lines
+        From: starts a block, To: adds addresses, Sent:/Date: sets date
+        keep a block only if it has a To, or a From and a date"]
+        PB --> IB["Innermost block = last block that has a From line
+        this is the original sender, not a forwarding hop"]
+        IB --> HT{"Innermost block
+        has To addresses?"}
+        HT -->|yes| TO["Use its To addresses
+        toSource = innermost"]
+        HT -->|no| WO["Walk outward one block at a time
+        to the nearest block with a To line
+        toSource = outer_block_N"]
+        WO --> WF{"Any block with
+        a To line?"}
+        WF -->|yes| TO
+        WF -->|no| AI{"ai_extract hook
+        supplied?"}
+        AI -->|"no (CLI and n8n never pass one)"| R4(["Review
+        Original To line could not be parsed"])
+        AI -->|yes| AX["AI proposes addresses
+        keep only ones literally present in the body
+        toSource = ai"]
+        AX --> AXF{"Any kept?"}
+        AXF -->|no| R4
+        AXF -->|yes| TO
+        TO --> CARRY["Carry originalFrom and originalDate
+        from the chosen block, else the innermost block with a From"]
+        CARRY --> LR{"Look up each To address
+        in towerRecipients and groundRecipients"}
+    end
+
+    LR -->|Tower only| TW
+    LR -->|Ground only| GR
+    LR -->|both| R5(["Review
+    To addresses match both Tower and Ground lists"])
+    LR -->|neither| R6(["Review
+    Unrecognized forwarded To address"])
+
+    %% ---------------- Direct branch ----------------
+    MK -->|no| DE{"Body empty and no
+    From on the object?"}
+    DE -->|yes| R3
+    DE -->|no| SF
+
+    subgraph direct [Direct message: classify by the sender From address]
+        direction TB
+        SF["Read sender address
+        1. email.from / sender / fromAddress
+           string, {address}, {emailAddress:{address}}, or list
+        2. else the first 'From:' line in the body"]
+        SF --> SFF{"Sender found?"}
+        SFF -->|no| R7(["Review
+        Sender From address could not be read"])
+        SFF -->|yes| DT["Also record To and Date
+        from the object or body headers
+        toSource = from"]
+        DT --> LS{"Look up sender in
+        towerSenders and groundSenders"}
+    end
+
+    LS -->|Tower only| TW
+    LS -->|Ground only| GR
+    LS -->|both| R8(["Review
+    Sender matches both Tower and Ground lists"])
+    LS -->|neither| R9(["Review
+    Unrecognized sender"])
+
+    TW(["Tower
+    status = classified
+    reason = Matched Tower recipient / sender ..."])
+    GR(["Ground
+    status = classified
+    reason = Matched Ground recipient / sender ..."])
+
+    EXC["Any exception while parsing"] -.-> R10(["Review
+    Malformed email body"])
+
+    classDef step fill:#e8f1fb,stroke:#2b6cb0,color:#1a365d
+    classDef decide fill:#fffbea,stroke:#b7791f,color:#744210
+    classDef good fill:#e6f4ea,stroke:#2f855a,color:#22543d
+    classDef review fill:#fff5f5,stroke:#c53030,color:#742a2a
+    classDef ai fill:#fdf2e9,stroke:#c05621,color:#7b341e,stroke-dasharray: 4 3
+    class CFG,BT,PB,IB,TO,WO,CARRY,SF,DT,EXC step
+    class V1,V2,MK,FE,HT,WF,AXF,LR,DE,SFF,LS decide
+    class AI,AX ai
+    class TW,GR good
+    class R1,R2,R3,R4,R5,R6,R7,R8,R9,R10 review

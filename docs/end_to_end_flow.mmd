@@ -1,0 +1,67 @@
+%% End-to-end flow from email to Kirke workbook
+%% n8n: workflow/outlook-mop-automation.json
+%% Python: processor/pipeline.py process_package()
+
+flowchart TD
+    A([Email arrives
+    Outlook forward or direct Gmail]) --> B
+
+    subgraph n8n [n8n workflow]
+        direction TB
+        B["Classification Config (Set node)
+        address lists from settings.json"]
+        B --> C["Classify Forwarded Email (Code node)
+        n8n_classify.js
+        see docs/email_classification.mmd"]
+        C --> D{"Route Category (Switch)"}
+        D -->|Tower| E
+        D -->|Ground| E
+        D -->|Review| E
+        E["Process Excel and MOP (Execute Command)
+        python -m processor process ..."]
+    end
+
+    E --> F
+
+    subgraph py [Python: pipeline.process_package]
+        direction TB
+        F["Parse request date
+        originalDate header, else a date in the body"]
+        F --> G["Read schedule spreadsheet(s)
+        map columns through headerSynonyms
+        Fuze ID, PS Location, EnodeB, Site Name, SOW, dates, times"]
+        G --> H["Read MOP .docx file(s)
+        Fuze IDs, site name, scope text"]
+        H --> I["Match rows to MOPs
+        matchStrategy: filename digit runs, content, or both
+        site name fallback when no Fuze ID"]
+        I --> J["Brief SOW word limit
+        over the limit: AI summary if a key is set, else flag"]
+        J --> K["Request Type waterfall per row
+        request_type.classify_request_type
+        see docs/request_type_waterfall.mmd"]
+        K --> L{"Category and
+        row result"}
+        L -->|"Tower / Ground with a type"| M["Write row to the category sheet
+        of the Kirke output workbook"]
+        L -->|"Review, blank type,
+        or blocking issue"| N["Write row to the Review sheet
+        with the reason"]
+        M --> O["Name and copy MOP files
+        FuzeID_StartDate.docx, _2 on collision"]
+        N --> O
+        O --> P["Write manifest.json and reply summary
+        issues, excluded sites, delivered files"]
+    end
+
+    P --> Q([Kirke workbook + MOPs + manifest
+    in outputDir])
+
+    classDef step fill:#e8f1fb,stroke:#2b6cb0,color:#1a365d
+    classDef decide fill:#fffbea,stroke:#b7791f,color:#744210
+    classDef good fill:#e6f4ea,stroke:#2f855a,color:#22543d
+    classDef review fill:#fff5f5,stroke:#c53030,color:#742a2a
+    class B,C,E,F,G,H,I,J,K,M,O,P step
+    class D,L decide
+    class Q good
+    class N review
