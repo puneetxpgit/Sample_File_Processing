@@ -1,0 +1,262 @@
+{
+  "name": "Outlook MOP Automation",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "6e148fb6-e525-4f8c-85a2-85b407e4f442",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "35d6d2a8-b223-4d8c-a9c3-8515b06f8796",
+              "name": "towerRecipients",
+              "value": "tower-mop@example.com",
+              "type": "string"
+            },
+            {
+              "id": "c330ccff-af33-4267-b8a4-467d146925b5",
+              "name": "groundRecipients",
+              "value": "ground-mop@example.com",
+              "type": "string"
+            },
+            {
+              "id": "464e23f8-536b-4a79-9f98-a9a92b50241a",
+              "name": "towerSenders",
+              "value": "ctx_tower_kirke@yahoo.com",
+              "type": "string"
+            },
+            {
+              "id": "0b3c6638-e507-49cb-bec5-228f5716cc35",
+              "name": "groundSenders",
+              "value": "ctx_ground_kirke@yahoo.com",
+              "type": "string"
+            },
+            {
+              "id": "de699830-4f27-4aca-b7f3-5eb1b0e252db",
+              "name": "emailId",
+              "value": "sample-gillett",
+              "type": "string"
+            },
+            {
+              "id": "e011cb2b-bb8d-47d4-b371-d998d3766467",
+              "name": "sampleBody",
+              "value": "Please process.\n\n-----Original Message-----\nFrom: Jane GC <jane.gc@vendor.com>\nSent: Tuesday, October 20, 2026 8:14 AM\nTo: Tower MOP <tower-mop@example.com>\nSubject: GILLETT\n\nSchedule attached.\n",
+              "type": "string"
+            },
+            {
+              "id": "ba17b4b3-da1d-4faa-acc7-bb0597978985",
+              "name": "spreadsheetPath",
+              "value": "C:\\Users\\rishav.patel\\Documents\\Sample_File_processing\\GILLETT - Kirke Schedule Request 10.22.26.xlsx",
+              "type": "string"
+            },
+            {
+              "id": "1d8cf995-602c-459c-a9bd-37770b563801",
+              "name": "mopPaths",
+              "value": "C:\\Users\\rishav.patel\\Documents\\Sample_File_processing\\GILLETT - MOP DAY 2.docx",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4f4a312a-b0fa-4145-9f70-dba4b79c4ef9",
+      "name": "Classification Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        520,
+        300
+      ],
+      "notes": "Replace example.com with the real Tower and Ground lists. Replace the sample body and paths with the Outlook message and saved attachments."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node: Run once for each item.\n// Outlook forwards use the inner To line against towerRecipients and groundRecipients.\n// Direct Gmail messages use the sender From address against towerSenders and groundSenders.\n\nconst config = $('Classification Config').first().json;\nconst email = $input.item.json;\n\nfunction asList(value) {\n  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);\n  return String(value || '').split(/[,;\\n]/).map((item) => item.trim()).filter(Boolean);\n}\n\nfunction normalize(address) {\n  return String(address || '').trim().toLowerCase();\n}\n\nfunction extractEmails(value) {\n  return [...String(value || '').matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi)].map((match) =>\n    normalize(match[0])\n  );\n}\n\nfunction htmlToText(html) {\n  return String(html || '')\n    .replace(/<br\\s*\\/?>/gi, '\\n')\n    .replace(/<\\/(p|div|tr|h\\d|li|table)>/gi, '\\n')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/&amp;/gi, '&')\n    .replace(/&lt;/gi, '<')\n    .replace(/&gt;/gi, '>')\n    .replace(/&#39;|&apos;/gi, \"'\")\n    .replace(/&quot;/gi, '\"');\n}\n\nfunction bodyText(source) {\n  const body = source.body || source.sampleBody;\n  if (typeof body === 'string') return body;\n  if (body && typeof body === 'object' && typeof body.content === 'string') {\n    const type = String(body.contentType || '').toLowerCase();\n    return type.includes('html') ? htmlToText(body.content) : body.content;\n  }\n  if (typeof source.text === 'string') return source.text;\n  if (typeof source.bodyPreview === 'string') return source.bodyPreview;\n  return '';\n}\n\nfunction parseBlocks(text) {\n  const marker = text.search(/^-{2,}\\s*Original Message\\s*-{2,}|^Begin forwarded message/im);\n  const region = marker >= 0 ? text.slice(marker) : text;\n  const lines = region.split(/\\r?\\n/);\n  const blocks = [];\n  let current = null;\n  const push = () => {\n    if (current && (current.to.length || (current.from.length && current.dateRaw))) blocks.push(current);\n  };\n  for (let i = 0; i < lines.length; i += 1) {\n    let line = lines[i];\n    while (i + 1 < lines.length && /^[ \\t]/.test(lines[i + 1])) {\n      const next = lines[i + 1].trim();\n      if (/^(from|sent|date|to|cc|bcc|subject)\\s*:/i.test(next)) break;\n      i += 1;\n      line += ` ${next}`;\n    }\n    const match = line.match(/^(from|sent|date|to)\\s*:\\s*(.*)$/i);\n    if (!match) continue;\n    const key = match[1].toLowerCase();\n    const value = match[2].trim();\n    if (key === 'from') {\n      push();\n      current = { from: extractEmails(value), to: [], dateRaw: '' };\n    } else if (!current) {\n      continue;\n    } else if (key === 'to') {\n      current.to.push(...extractEmails(value));\n    } else {\n      current.dateRaw = value;\n    }\n  }\n  push();\n  return blocks;\n}\n\nfunction addressesFromValue(value) {\n  if (value == null || value === '') return [];\n  if (typeof value === 'string') return extractEmails(value);\n  if (Array.isArray(value)) {\n    const found = [];\n    value.forEach((item) => found.push(...addressesFromValue(item)));\n    return [...new Set(found)];\n  }\n  if (typeof value === 'object') {\n    if (value.emailAddress) {\n      return addressesFromValue(value.emailAddress.address || value.emailAddress.email || '');\n    }\n    for (const key of ['address', 'email', 'value']) {\n      if (value[key]) return addressesFromValue(value[key]);\n    }\n  }\n  return [];\n}\n\nfunction objectAddresses(source) {\n  for (const key of ['from', 'sender', 'fromAddress']) {\n    const found = addressesFromValue(source[key]);\n    if (found.length) return found;\n  }\n  return [];\n}\n\nfunction scanHeaders(text) {\n  const lines = String(text || '').split(/\\r?\\n/);\n  const headers = [];\n  for (let i = 0; i < lines.length; i += 1) {\n    let line = lines[i];\n    while (i + 1 < lines.length && /^[ \\t]/.test(lines[i + 1])) {\n      const next = lines[i + 1].trim();\n      if (/^(from|sent|date|to|cc|bcc|subject)\\s*:/i.test(next)) break;\n      i += 1;\n      line += ` ${next}`;\n    }\n    const match = line.match(/^(from|sent|date|to)\\s*:\\s*(.*)$/i);\n    if (match) headers.push([match[1].toLowerCase(), match[2].trim()]);\n  }\n  return headers;\n}\n\nfunction isForward(text) {\n  return /^-{2,}\\s*Original Message\\s*-{2,}|^Begin forwarded message/im.test(text || '');\n}\n\nfunction senderAddresses(source, text) {\n  const found = objectAddresses(source);\n  if (found.length) return found;\n  const header = scanHeaders(text).find(([key]) => key === 'from');\n  return header ? extractEmails(header[1]) : [];\n}\n\nfunction directTo(source, text) {\n  for (const key of ['to', 'toAddress']) {\n    const found = addressesFromValue(source[key]);\n    if (found.length) return found.join('; ');\n  }\n  const header = scanHeaders(text).find(([key]) => key === 'to');\n  return header ? extractEmails(header[1]).join('; ') : '';\n}\n\nfunction directDate(source, text) {\n  for (const key of ['date', 'originalDate']) {\n    if (typeof source[key] === 'string' && source[key].trim()) return source[key].trim();\n  }\n  const header = scanHeaders(text).find(([key, value]) => (key === 'sent' || key === 'date') && value);\n  return header ? header[1] : '';\n}\n\nfunction review(reason) {\n  return {\n    json: {\n      emailId: email.internetMessageId || email.id || email.emailId || '',\n      category: 'Review',\n      originalTo: '',\n      originalFrom: '',\n      originalDate: '',\n      reason,\n      status: 'review_required',\n      body: '',\n      bodyBase64: '',\n      attachments: email.attachments || [],\n      spreadsheetPath: email.spreadsheetPath || '',\n      mopPaths: email.mopPaths || '',\n    },\n  };\n}\n\nfunction classifyForward(text, tower, ground) {\n  const blocks = parseBlocks(text);\n  const extracted = [...new Set(blocks.flatMap((block) => block.to))];\n  const innermost = [...blocks].reverse().find((block) => block.from.length) || blocks[blocks.length - 1];\n  const base = {\n    emailId: email.internetMessageId || email.id || email.emailId || 'manual-sample',\n    originalFrom: innermost?.from?.[0] || '',\n    originalDate: innermost?.dateRaw || '',\n    body: text,\n    bodyBase64: Buffer.from(text, 'utf8').toString('base64'),\n    attachments: email.attachments || [],\n    subject: email.subject || '',\n    spreadsheetPath: email.spreadsheetPath || '',\n    mopPaths: email.mopPaths || '',\n  };\n\n  if (!extracted.length) {\n    return {\n      json: {\n        ...base,\n        category: 'Review',\n        originalTo: '',\n        reason: 'Original To line could not be parsed',\n        status: 'review_required',\n        needsAiToExtraction: true,\n      },\n    };\n  }\n\n  const towerHits = extracted.filter((address) => tower.has(address));\n  const groundHits = extracted.filter((address) => ground.has(address));\n  if (towerHits.length && groundHits.length) {\n    return {\n      json: {\n        ...base,\n        category: 'Review',\n        originalTo: [...towerHits, ...groundHits].join('; '),\n        reason: 'Forwarded To addresses match both Tower and Ground lists',\n        status: 'review_required',\n      },\n    };\n  }\n  if (towerHits.length || groundHits.length) {\n    const hits = towerHits.length ? towerHits : groundHits;\n    const category = towerHits.length ? 'Tower' : 'Ground';\n    return {\n      json: {\n        ...base,\n        category,\n        originalTo: hits.join('; '),\n        reason: `Matched ${category} recipient ${hits.join(', ')}`,\n        status: 'classified',\n      },\n    };\n  }\n  return {\n    json: {\n      ...base,\n      category: 'Review',\n      originalTo: extracted.join('; '),\n      reason: `Unrecognized forwarded To address: ${extracted.join(', ')}`,\n      status: 'review_required',\n    },\n  };\n}\n\nfunction classifySender(text, towerSenders, groundSenders) {\n  const senders = senderAddresses(email, text);\n  const base = {\n    emailId: email.internetMessageId || email.id || email.emailId || 'manual-sample',\n    originalFrom: senders.join('; '),\n    originalDate: directDate(email, text),\n    body: text,\n    bodyBase64: Buffer.from(text, 'utf8').toString('base64'),\n    attachments: email.attachments || [],\n    subject: email.subject || '',\n    spreadsheetPath: email.spreadsheetPath || '',\n    mopPaths: email.mopPaths || '',\n    toSource: 'from',\n    originalTo: directTo(email, text),\n  };\n  if (!senders.length) {\n    return {\n      json: {\n        ...base,\n        category: 'Review',\n        reason: 'Sender From address could not be read',\n        status: 'review_required',\n      },\n    };\n  }\n  const towerHits = senders.filter((address) => towerSenders.has(address));\n  const groundHits = senders.filter((address) => groundSenders.has(address));\n  if (towerHits.length && groundHits.length) {\n    return {\n      json: {\n        ...base,\n        category: 'Review',\n        reason: 'Sender addresses match both Tower and Ground lists',\n        status: 'review_required',\n      },\n    };\n  }\n  if (towerHits.length || groundHits.length) {\n    const hits = towerHits.length ? towerHits : groundHits;\n    const category = towerHits.length ? 'Tower' : 'Ground';\n    return {\n      json: {\n        ...base,\n        originalFrom: hits.join('; '),\n        category,\n        reason: `Matched ${category} sender ${hits.join(', ')}`,\n        status: 'classified',\n      },\n    };\n  }\n  return {\n    json: {\n      ...base,\n      category: 'Review',\n      reason: `Unrecognized sender: ${senders.join(', ')}`,\n      status: 'review_required',\n    },\n  };\n}\n\ntry {\n  const tower = new Set(asList(config.towerRecipients).map(normalize));\n  const ground = new Set(asList(config.groundRecipients).map(normalize));\n  const towerSenders = new Set(asList(config.towerSenders).map(normalize));\n  const groundSenders = new Set(asList(config.groundSenders).map(normalize));\n  const configuredOnBoth = [\n    ...new Set([\n      ...[...tower].filter((address) => ground.has(address)),\n      ...[...towerSenders].filter((address) => groundSenders.has(address)),\n    ]),\n  ];\n  if (configuredOnBoth.length) {\n    return review(`Address is configured on both lists: ${configuredOnBoth.join(', ')}`);\n  }\n  if (!tower.size && !ground.size && !towerSenders.size && !groundSenders.size) {\n    return review('Tower and Ground recipient and sender lists are empty');\n  }\n\n  const text = bodyText(email);\n  if (isForward(text)) {\n    if (!text.trim()) return review('Email body is missing or empty');\n    return classifyForward(text, tower, ground);\n  }\n  if (!text.trim() && !objectAddresses(email).length) return review('Email body is missing or empty');\n  return classifySender(text, towerSenders, groundSenders);\n} catch (error) {\n  return review(`Malformed email body: ${error.message}`);\n}\n"
+      },
+      "id": "84f72652-17e9-4c21-9515-9303d9c83b3e",
+      "name": "Classify Forwarded Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "2e938d5b-6dd0-4cff-b4ba-f606a9f653ac",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "Tower",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Tower"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "7b62b7ca-6695-44cf-a2aa-a63f6eaf2d6e",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "Ground",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Ground"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Review"
+        }
+      },
+      "id": "adfefde7-f1cc-4a81-80d5-b683b9960e9c",
+      "name": "Route Category",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1040,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "python -m processor process --root \"C:\\Users\\rishav.patel\\Documents\\Sample_File_processing\" --email-id \"{{ $json.emailId }}\" --category \"{{ $json.category }}\" --original-to \"{{ $json.originalTo }}\" --original-from \"{{ $json.originalFrom }}\" --original-date \"{{ $json.originalDate }}\" --reason \"{{ $json.reason }}\" --body-b64 \"{{ $json.bodyBase64 }}\" --spreadsheet \"{{ $json.spreadsheetPath }}\" --mop \"{{ $json.mopPaths }}\""
+      },
+      "id": "61d9ee23-0972-4fdf-af07-4c1d4b0dfbfe",
+      "name": "Process Excel and MOP",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        300
+      ],
+      "notes": "Tower and Ground update their workbooks. Review writes output/Review and leaves the email uncompleted."
+    },
+    {
+      "parameters": {
+        "content": "Step 4 is Classify Forwarded Email. Step 5 is Process Excel and MOP. All three switch outputs run that step. The category decides which folder is written.",
+        "height": 160,
+        "width": 280
+      },
+      "id": "8843bb7d-5d1b-4e55-93fd-aa479d5ce233",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        80
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Classification Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classification Config": {
+      "main": [
+        [
+          {
+            "node": "Classify Forwarded Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Forwarded Email": {
+      "main": [
+        [
+          {
+            "node": "Route Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Category": {
+      "main": [
+        [
+          {
+            "node": "Process Excel and MOP",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Process Excel and MOP",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Process Excel and MOP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

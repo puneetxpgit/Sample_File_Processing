@@ -1,0 +1,70 @@
+{
+  "towerRecipients": [],
+  "groundRecipients": [],
+  "towerSenders": ["ctx_tower_kirke@yahoo.com"],
+  "groundSenders": ["ctx_ground_kirke@yahoo.com"],
+  "templatePath": "Kirke Output format (1).xlsx",
+  "catalogPath": "Kirke Output format (1).xlsx",
+  "outputDir": "output",
+  "mopDateFormat": "YYYY-MM-DD",
+  "briefSowWordLimit": 500,
+  "requestTypeMinConfidence": 90,
+  "matchStrategy": "both",
+  "populateLocationAndSiteName": true,
+  "headerSynonyms": {
+    "Fuze Project ID": ["Fuze ID", "Fuze Project #", "Fuze Project ID", "Fuze Project Number", "Project ID"],
+    "PS Location": ["LOCATION CODE", "PS LOCATION CODE", "PS Loc #", "PS Loc", "PS Location"],
+    "EnodeB": ["E-NODEB ID", "E-NODEB", "EnodeB", "eNodeB ID", "ENODEB ID"],
+    "Site Name": ["Site Name", "SITE NAME"],
+    "GC Vendor": ["GC VENDOR", "GC Vendor", "Vendor", "General Contractor"],
+    "SOW": ["BRIEF SOW", "SOW", "Scope of Work", "Scope"],
+    "Start Date": ["Start Date"],
+    "End Date": ["End Date"],
+    "Start Time": ["Start Time"],
+    "End Time": ["End Time"]
+  },
+  "requestTypes": {
+    "Tower": ["SNAP", "Cdu to uADPF", "Powershift", "OVP", "SNAP w/ Mount Mod", "PDU/Powershift"],
+    "Ground": ["Ground Prep", "Battery Replacement", "OVP", "Power Plant/Battery", "PDU", "IB SNAP"]
+  },
+  "explicitPhrases": {
+    "Tower": [
+      ["SNAP w/ Mount Mod", ["snap w/ mount", "snap with mount", "mount mod"]],
+      ["PDU/Powershift", ["pdu/powershift", "pdu powershift"]],
+      ["Cdu to uADPF", ["cdu30 to uadpf", "cdu30 to uapdf", "cdu to uadpf", "cdu to uapdf"]],
+      ["Powershift", ["powershift"]],
+      ["SNAP", ["bbu swap for the snap", "for the snap", "snap"]],
+      ["OVP", ["ovp replacement", "swap indoor ovp", "swap ovp", "install ovp"]]
+    ],
+    "Ground": [
+      ["IB SNAP", ["ib snap"]],
+      ["Battery Replacement", ["battery replacement"]],
+      ["Power Plant/Battery", ["power plant"]],
+      ["Ground Prep", ["ground prep"]],
+      ["PDU", ["pdu upgrade", "pdu"]],
+      ["OVP", ["swap indoor ovp", "swap ovp", "ovp replacement", "install ovp", "ovp"]]
+    ]
+  },
+  "sampleJobs": [
+    {
+      "emailId": "sample-gillett",
+      "category": "Tower",
+      "categoryNote": "Sample category Tower comes from the MOP text 'Tower Work'. The From, Date, and To values are the demo forward used by the n8n workflow, not a live mailbox.",
+      "spreadsheet": "GILLETT - Kirke Schedule Request 10.22.26.xlsx",
+      "mops": ["GILLETT - MOP DAY 2.docx"],
+      "originalFrom": "jane.gc@vendor.com",
+      "originalDate": "Tuesday, October 20, 2026 8:14 AM",
+      "originalTo": "tower-mop@example.com"
+    },
+    {
+      "emailId": "sample-powell",
+      "category": "Review",
+      "categoryNote": "PDU is allowed for both Tower and Ground under different names. No forwarded To line was provided, so this sample stays on the exception branch.",
+      "spreadsheet": "10-23-2026_Kirke_Schedule_Request_2026.xlsx",
+      "mops": ["POWELL_PROJECT_MOP_2026.docx"],
+      "originalFrom": "",
+      "originalDate": "",
+      "originalTo": ""
+    }
+  ]
+}
